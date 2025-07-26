@@ -97,6 +97,9 @@ Export GeoDataFrames to KML format for visualization in Google Earth.
 3. **Check outputs**:
    All generated files will be saved in the `output/` directory.
 
+4. **View analysis report**:
+   See `ANALYSIS_REPORT.md` for detailed explanations of all charts and insights.
+
 ### Programmatic Usage
 
 ```python
