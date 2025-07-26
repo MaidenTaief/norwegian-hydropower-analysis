@@ -14,6 +14,25 @@ This toolkit processes Norwegian hydropower data provided in shapefile format an
 - **Dam Points**: Point locations of dam infrastructure  
 - **Reservoirs**: Polygon representations of water reservoirs and regulated lakes
 
+## 📊 Sample Results
+
+### Enhanced Reservoir Analysis
+![Reservoir Analysis](docs/images/enhanced_reservoir_analysis.png)
+
+*Six-panel analysis showing reservoir area distribution, volume analysis, size categories, and correlation patterns.*
+
+### Dam Construction Timeline
+![Construction Timeline](docs/images/dam_construction_timeline.png)
+
+*Historical development of Norwegian hydropower infrastructure from 1660 to 2025, showing the post-WWII construction boom.*
+
+### Enhanced Spatial Visualization
+![Spatial Analysis](docs/images/enhanced_spatial_visualization.png)
+
+*Geographic distribution of 12,763 infrastructure elements across Norway with enhanced visibility and categorization.*
+
+> 📁 **More Charts**: See the full collection of generated visualizations in the [`docs/images/`](docs/images/) directory and detailed explanations in [`ANALYSIS_REPORT.md`](ANALYSIS_REPORT.md).
+
 ## Data Files
 
 The analysis uses the following files, typically provided as a set for each spatial layer:
