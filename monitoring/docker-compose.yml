@@ -1,0 +1,97 @@
+services:
+  # =============================================================================
+  # PostgreSQL with PostGIS (Apple Silicon compatible)
+  # =============================================================================
+  timescaledb:
+    image: postgres:14
+    container_name: dam_monitoring_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: dam_monitoring
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dam_monitor_2024}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - dam_data:/var/lib/postgresql/data
+      - ./database/schema-simple.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    networks:
+      - dam_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d dam_monitoring"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # =============================================================================
+  # FastAPI Backend - Main monitoring API
+  # =============================================================================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dam_monitoring_api
+    restart: unless-stopped
+    environment:
+      # Database connection
+      DB_HOST: timescaledb
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_NAME: dam_monitoring
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dam_monitor_2024}
+      
+      # Norwegian API credentials
+      FROST_CLIENT_ID: ${FROST_CLIENT_ID}
+      SENTINEL_USER: ${SENTINEL_USER}
+      SENTINEL_PASS: ${SENTINEL_PASS}
+      
+      # Application settings
+      PYTHONPATH: /app
+      PYTHONUNBUFFERED: 1
+    ports:
+      - "8000:8000"
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    volumes:
+      - ./api:/app:ro
+    networks:
+      - dam_network
+
+  # =============================================================================
+  # Grafana - Monitoring dashboards
+  # =============================================================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: dam_monitoring_grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+    ports:
+      - "3000:3000"
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - dam_network
+
+# =============================================================================
+# VOLUMES
+# =============================================================================
+volumes:
+  dam_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
+networks:
+  dam_network:
+    driver: bridge

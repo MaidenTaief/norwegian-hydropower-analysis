@@ -1,0 +1,25 @@
+# FastAPI and web framework dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# Database dependencies
+asyncpg==0.29.0
+psycopg2-binary==2.9.7
+
+# HTTP client dependencies
+aiohttp==3.9.0
+requests>=2.28.0
+
+# Data processing dependencies
+pandas>=1.5.0
+numpy>=1.24.0
+geopandas>=0.12.0
+shapely>=1.8.0
+
+# Norwegian-specific packages
+sentinelsat>=1.2.1
+python-dotenv>=1.0.0
+
+# Additional utilities
+pydantic>=2.5.0
