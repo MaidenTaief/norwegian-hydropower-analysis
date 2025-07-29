@@ -1,4 +1,4 @@
-# Norway Dam Project - Comprehensive Analysis System
+# Dam Project - Comprehensive Analysis System
 
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue)](https://python.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
