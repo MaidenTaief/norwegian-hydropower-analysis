@@ -121,3 +121,41 @@ Data/*.cpg
 # But keep the Data directory structure
 !Data/
 !Data/README.md 
+
+# ============================================================================
+# Large database files - DO NOT UPLOAD TO GIT
+# ============================================================================
+25988293/
+Data/
+*.shp
+*.dbf
+*.shx
+*.prj
+*.cpg
+*.sbn
+*.sbx
+*.gdb/
+*.txt
+*.csv
+*.xlsx
+*.xls
+
+# ============================================================================
+# Output files
+# ============================================================================
+output/
+*.png
+*.jpg
+*.jpeg
+*.kml
+*.geojson
+
+# ============================================================================
+# Monitoring system files (kept separate)
+# ============================================================================
+monitoring/
+setup_monitoring.py
+test_apis.py
+MONITORING_SETUP.md
+import_existing_data.py
+quick_import.py 

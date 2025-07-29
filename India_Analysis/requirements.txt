@@ -1,0 +1,20 @@
+# Indian Dam Analysis System Requirements
+# Based on Global Dam Watch (GDW) database analysis
+
+# Core data analysis
+pandas>=1.5.0
+numpy>=1.24.0
+
+# Geospatial analysis
+geopandas>=0.12.0
+shapely>=1.8.0
+fiona>=1.8.0
+pyproj>=3.4.0
+
+# Visualization
+matplotlib>=3.5.0
+seaborn>=0.11.0
+
+# Additional utilities
+pathlib
+warnings 
