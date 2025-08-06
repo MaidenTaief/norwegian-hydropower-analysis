@@ -1,0 +1,157 @@
+version: '3.8'
+
+# =====================================================================================
+# NORWEGIAN DAM HEALTH MONITORING SYSTEM - DOCKER DEPLOYMENT
+# =====================================================================================
+# Simplified deployment optimized for Apple Silicon (M1/M2)
+# Core services: TimescaleDB, FastAPI, Grafana
+# Real Norwegian data integration with your API credentials
+# =====================================================================================
+
+services:
+  # ==================================================================================
+  # TIMESCALEDB - Time-series database for Norwegian dam data
+  # ==================================================================================
+  timescaledb:
+    image: timescale/timescaledb-ha:pg14-latest
+    platform: linux/amd64  # Apple Silicon compatibility
+    container_name: norwegian_dam_timescaledb
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dam_monitor_2024}
+      TIMESCALEDB_TELEMETRY: off
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - dam_monitoring
+
+  # ==================================================================================
+  # FASTAPI - Norwegian Dam Monitoring API
+  # ==================================================================================
+  api:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: norwegian_dam_api
+    environment:
+      # Database connection
+      POSTGRES_HOST: timescaledb
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: postgres
+      POSTGRES_USER: dam_monitor_app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dam_monitor_2024}
+      
+      # Norwegian API credentials (from your .env)
+      FROST_CLIENT_ID: ${FROST_CLIENT_ID}
+      SENTINEL_USER: ${SENTINEL_USER}
+      SENTINEL_PASS: ${SENTINEL_PASS}
+      
+      # Monitoring configuration
+      COLLECTION_INTERVAL_MINUTES: ${COLLECTION_INTERVAL_MINUTES:-60}
+      BATCH_SIZE: ${BATCH_SIZE:-10}
+      DEBUG: ${DEBUG:-false}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./logs:/app/logs
+      - ./api:/app/api:ro
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - dam_monitoring
+
+  # ==================================================================================
+  # GRAFANA - Professional monitoring dashboards
+  # ==================================================================================
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: norwegian_dam_grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_SECURITY_ADMIN_USER: admin
+      GF_INSTALL_PLUGINS: grafana-worldmap-panel,grafana-piechart-panel
+      GF_SECURITY_ALLOW_EMBEDDING: true
+      GF_AUTH_ANONYMOUS_ENABLED: true
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      - timescaledb
+      - api
+    restart: unless-stopped
+    networks:
+      - dam_monitoring
+
+# ==================================================================================
+# VOLUMES
+# ==================================================================================
+volumes:
+  timescaledb_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/data/postgres
+  
+  grafana_data:
+    driver: local
+
+# ==================================================================================
+# NETWORKS
+# ==================================================================================
+networks:
+  dam_monitoring:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# ==================================================================================
+# SYSTEM INFORMATION
+# ==================================================================================
+# 
+# 🇳🇴 NORWEGIAN DAM HEALTH MONITORING SYSTEM
+# 
+# Services:
+# - TimescaleDB: http://localhost:5432 (Database)
+# - FastAPI: http://localhost:8000 (API & Documentation)
+# - Grafana: http://localhost:3000 (Dashboards)
+# 
+# Real Data Sources:
+# ✅ met.no: Live Norwegian weather
+# ✅ Frost API: Historical weather (your credentials)
+# ✅ Sentinel Hub: Satellite monitoring (your credentials)
+# ✅ NVE Hydrology: Water levels
+# ✅ VARSOM: Flood/avalanche warnings
+# 
+# Deployment:
+# docker-compose up -d
+# 
+# Health Check:
+# curl http://localhost:8000/health
+# 
+# Documentation:
+# http://localhost:8000/docs
+# 
+# ================================================================================== 
