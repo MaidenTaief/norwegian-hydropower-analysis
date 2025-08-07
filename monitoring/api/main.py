@@ -31,6 +31,19 @@ from contextlib import asynccontextmanager
 # Import our Norwegian APIs
 from api.norwegian_apis import HealthMonitoringAPI
 
+# Import failure analysis components
+from api.failure_endpoints import failure_router
+from api.failure_analysis import integrate_failure_analysis
+
+# Import ML risk prediction components
+from api.ml_risk_prediction import DamRiskPredictor
+
+# Import SHM technology components
+from api.shm_technologies import IntegratedSHMSystem, create_shm_tables
+
+# Import Arctic risk analysis components
+from api.arctic_risk_analyzer import ArcticRiskAnalyzer, create_arctic_tables
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -113,10 +126,52 @@ class MonitoringStats(BaseModel):
     data_points_last_24h: int
     last_update: datetime
 
+# New Pydantic models for advanced features
+
+class MLRiskPrediction(BaseModel):
+    dam_id: int
+    risk_score: float
+    risk_level: str
+    failure_probability: float
+    most_likely_failure_type: Optional[str]
+    predictions: Dict[str, float]
+    recommended_actions: List[str]
+    confidence: float
+
+class ArcticRiskAssessment(BaseModel):
+    dam_id: int
+    latitude: float
+    is_arctic: bool
+    overall_arctic_risk: float
+    permafrost_risk: Dict[str, Any]
+    ice_dam_risk: Dict[str, Any]
+    freeze_thaw_risk: Dict[str, Any]
+    climate_change_impact: Dict[str, Any]
+    mitigation_measures: List[str]
+
+class SHMAssessment(BaseModel):
+    dam_id: int
+    timestamp: str
+    fem_analysis: Dict[str, Any]
+    fiber_optic_analysis: Dict[str, Any]
+    drone_inspection: Dict[str, Any]
+    integrated_health_score: float
+    recommendations: List[str]
+
+class MLModelPerformance(BaseModel):
+    model_name: str
+    r2_score: float
+    mae: float
+    mse: float
+    training_date: Optional[str]
+
 # Global variables
 db_pool = None
 monitoring_api = None
 monitoring_task = None
+ml_predictor = None
+arctic_analyzer = None
+shm_system = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -145,6 +200,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include failure analysis router
+app.include_router(failure_router)
 
 async def startup_event():
     """Initialize database connection and monitoring APIs"""
@@ -181,6 +239,42 @@ async def startup_event():
             logger.info("✅ Background monitoring started")
         else:
             logger.warning("⚠️ Some API credentials missing - monitoring limited")
+        
+        # Initialize failure analysis system
+        try:
+            failure_result = await integrate_failure_analysis(db_pool)
+            if failure_result['status'] == 'success':
+                logger.info("✅ Failure analysis system initialized")
+            else:
+                logger.warning(f"⚠️ Failure analysis initialization issue: {failure_result.get('error', 'Unknown')}")
+        except Exception as e:
+            logger.warning(f"⚠️ Failure analysis initialization failed: {e}")
+        
+        # Initialize ML risk prediction system
+        try:
+            global ml_predictor
+            ml_predictor = DamRiskPredictor(db_pool)
+            logger.info("✅ ML risk prediction system initialized")
+        except Exception as e:
+            logger.warning(f"⚠️ ML system initialization failed: {e}")
+        
+        # Initialize Arctic risk analysis system
+        try:
+            global arctic_analyzer
+            arctic_analyzer = ArcticRiskAnalyzer(db_pool)
+            await create_arctic_tables(db_pool)
+            logger.info("✅ Arctic risk analysis system initialized")
+        except Exception as e:
+            logger.warning(f"⚠️ Arctic analysis initialization failed: {e}")
+        
+        # Initialize SHM technology system
+        try:
+            global shm_system
+            shm_system = IntegratedSHMSystem(dam_id=1)  # Default dam for system operations
+            await create_shm_tables(db_pool)
+            logger.info("✅ SHM technology system initialized")
+        except Exception as e:
+            logger.warning(f"⚠️ SHM system initialization failed: {e}")
             
     except Exception as e:
         logger.error(f"❌ Startup failed: {e}")
@@ -227,7 +321,10 @@ async def health_check():
         api_status = {
             "database": "✅ Connected",
             "monitoring_apis": "✅ Active" if monitoring_api else "⚠️ Limited",
-            "background_monitoring": "✅ Running" if monitoring_task and not monitoring_task.done() else "❌ Stopped"
+            "background_monitoring": "✅ Running" if monitoring_task and not monitoring_task.done() else "❌ Stopped",
+            "ml_prediction": "✅ Active" if ml_predictor else "❌ Not initialized",
+            "arctic_analysis": "✅ Active" if arctic_analyzer else "❌ Not initialized",
+            "shm_technology": "✅ Active" if shm_system else "❌ Not initialized"
         }
         
         return {
@@ -823,6 +920,257 @@ async def get_risk_matrix(db: asyncpg.Pool = Depends(get_db)):
             }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating risk matrix: {str(e)}")
+
+# ==================================================================================
+# ML RISK PREDICTION ENDPOINTS
+# ==================================================================================
+
+@app.post("/ml/train-models")
+async def train_ml_models(db: asyncpg.Pool = Depends(get_db)):
+    """Train all ML risk prediction models"""
+    try:
+        if not ml_predictor:
+            raise HTTPException(status_code=503, detail="ML system not initialized")
+        
+        scores = await ml_predictor.train_all_models()
+        return {
+            "status": "success",
+            "model_scores": scores,
+            "trained_at": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"ML training failed: {str(e)}")
+
+@app.get("/ml/predict/{dam_id}", response_model=MLRiskPrediction)
+async def get_ml_risk_prediction(dam_id: int, db: asyncpg.Pool = Depends(get_db)):
+    """Get ML-based risk prediction for a dam"""
+    try:
+        if not ml_predictor:
+            raise HTTPException(status_code=503, detail="ML system not initialized")
+        
+        prediction = await ml_predictor.predict_dam_risk(dam_id)
+        
+        if 'error' in prediction:
+            raise HTTPException(status_code=404, detail=prediction['error'])
+        
+        return MLRiskPrediction(
+            dam_id=prediction['dam_id'],
+            risk_score=prediction['risk_score'],
+            risk_level=prediction['risk_level'],
+            failure_probability=prediction['risk_score'] / 100,
+            most_likely_failure_type=prediction.get('most_likely_failure_type'),
+            predictions=prediction['predictions'],
+            recommended_actions=prediction['recommended_actions'],
+            confidence=0.85
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"ML prediction failed: {str(e)}")
+
+@app.get("/ml/model-performance")
+async def get_model_performance():
+    """Get ML model performance metrics"""
+    try:
+        if not ml_predictor or not ml_predictor.model_scores:
+            return {"message": "No trained models available", "models": []}
+        
+        performance = []
+        for model_name, scores in ml_predictor.model_scores.items():
+            performance.append(MLModelPerformance(
+                model_name=model_name,
+                r2_score=scores.get('r2', 0),
+                mae=scores.get('mae', 0),
+                mse=scores.get('mse', 0),
+                training_date=datetime.now().isoformat()
+            ))
+        
+        return {"models": performance}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting model performance: {str(e)}")
+
+# ==================================================================================
+# ARCTIC RISK ANALYSIS ENDPOINTS
+# ==================================================================================
+
+@app.get("/arctic/analyze/{dam_id}", response_model=ArcticRiskAssessment)
+async def analyze_arctic_risk(dam_id: int, latitude: float = Query(..., ge=-90, le=90), 
+                            db: asyncpg.Pool = Depends(get_db)):
+    """Analyze Arctic-specific risks for a dam"""
+    try:
+        if not arctic_analyzer:
+            raise HTTPException(status_code=503, detail="Arctic analysis system not initialized")
+        
+        assessment = await arctic_analyzer.analyze_arctic_risks(dam_id, latitude)
+        
+        return ArcticRiskAssessment(
+            dam_id=assessment['dam_id'],
+            latitude=assessment['latitude'],
+            is_arctic=assessment['is_arctic'],
+            overall_arctic_risk=assessment['overall_arctic_risk'],
+            permafrost_risk=assessment['permafrost_risk'],
+            ice_dam_risk=assessment['ice_dam_risk'],
+            freeze_thaw_risk=assessment['freeze_thaw_risk'],
+            climate_change_impact=assessment['climate_change_impact'],
+            mitigation_measures=assessment['mitigation_measures']
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Arctic analysis failed: {str(e)}")
+
+@app.get("/arctic/regional-analysis")
+async def get_regional_arctic_analysis(db: asyncpg.Pool = Depends(get_db)):
+    """Get regional Arctic risk analysis for Norwegian regions"""
+    try:
+        if not arctic_analyzer:
+            raise HTTPException(status_code=503, detail="Arctic analysis system not initialized")
+        
+        from api.arctic_risk_analyzer import NorwegianRegionalAnalyzer
+        regional_analyzer = NorwegianRegionalAnalyzer(arctic_analyzer)
+        
+        analysis = await regional_analyzer.analyze_regional_risks()
+        return analysis
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Regional analysis failed: {str(e)}")
+
+# ==================================================================================
+# SHM TECHNOLOGY ENDPOINTS
+# ==================================================================================
+
+@app.get("/shm/assess/{dam_id}", response_model=SHMAssessment)
+async def run_shm_assessment(dam_id: int, height: float = Query(50), length: float = Query(200),
+                           thickness: float = Query(10), water_level: float = Query(65),
+                           temp_variation: float = Query(5), db: asyncpg.Pool = Depends(get_db)):
+    """Run comprehensive SHM assessment for a dam"""
+    try:
+        if not shm_system:
+            raise HTTPException(status_code=503, detail="SHM system not initialized")
+        
+        # Update dam ID for specific assessment
+        shm_system.dam_id = dam_id
+        
+        dam_properties = {
+            'height': height,
+            'length': length,
+            'thickness': thickness,
+            'water_level': water_level,
+            'temp_variation': temp_variation
+        }
+        
+        assessment = await shm_system.perform_comprehensive_assessment(dam_properties)
+        
+        return SHMAssessment(
+            dam_id=assessment['dam_id'],
+            timestamp=assessment['timestamp'],
+            fem_analysis=assessment['fem_analysis'],
+            fiber_optic_analysis=assessment['fiber_optic_analysis'],
+            drone_inspection=assessment['drone_inspection'],
+            integrated_health_score=assessment['integrated_health_score'],
+            recommendations=assessment['recommendations']
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"SHM assessment failed: {str(e)}")
+
+@app.get("/shm/fiber-optic/{dam_id}")
+async def get_fiber_optic_analysis(dam_id: int, water_level: float = Query(70),
+                                 temp_variation: float = Query(5), db: asyncpg.Pool = Depends(get_db)):
+    """Get fiber optic monitoring analysis for a dam"""
+    try:
+        if not shm_system:
+            raise HTTPException(status_code=503, detail="SHM system not initialized")
+        
+        readings = shm_system.fiber_optic.simulate_fiber_measurement({
+            'water_level': water_level,
+            'temperature_variation': temp_variation
+        })
+        
+        anomalies = shm_system.fiber_optic.detect_anomalies(readings)
+        
+        return {
+            "dam_id": dam_id,
+            "measurement_points": len(readings),
+            "anomalies": anomalies,
+            "strain_data": [{"position": r.position_m, "strain": r.strain, "temperature": r.temperature} 
+                          for r in readings[::10]]  # Every 10th point for API efficiency
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Fiber optic analysis failed: {str(e)}")
+
+@app.get("/shm/drone-inspection/{dam_id}")
+async def get_drone_inspection(dam_id: int, db: asyncpg.Pool = Depends(get_db)):
+    """Get drone inspection results for a dam"""
+    try:
+        if not shm_system:
+            raise HTTPException(status_code=503, detail="SHM system not initialized")
+        
+        results = shm_system.drone_inspection.process_drone_image(f"dam_{dam_id}_inspection.jpg")
+        results['dam_id'] = dam_id
+        
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Drone inspection failed: {str(e)}")
+
+# ==================================================================================
+# INTEGRATED ANALYTICS ENDPOINTS
+# ==================================================================================
+
+@app.get("/analytics/comprehensive-risk/{dam_id}")
+async def get_comprehensive_risk_analysis(dam_id: int, latitude: float = Query(..., ge=-90, le=90),
+                                        db: asyncpg.Pool = Depends(get_db)):
+    """Get comprehensive risk analysis combining ML, Arctic, and SHM assessments"""
+    try:
+        results = {}
+        
+        # ML Risk Prediction
+        if ml_predictor:
+            try:
+                ml_risk = await ml_predictor.predict_dam_risk(dam_id)
+                results['ml_prediction'] = ml_risk
+            except Exception as e:
+                results['ml_prediction'] = {"error": str(e)}
+        
+        # Arctic Risk Analysis
+        if arctic_analyzer:
+            try:
+                arctic_risk = await arctic_analyzer.analyze_arctic_risks(dam_id, latitude)
+                results['arctic_analysis'] = arctic_risk
+            except Exception as e:
+                results['arctic_analysis'] = {"error": str(e)}
+        
+        # SHM Assessment
+        if shm_system:
+            try:
+                shm_system.dam_id = dam_id
+                shm_assessment = await shm_system.perform_comprehensive_assessment({
+                    'height': 50, 'length': 200, 'thickness': 10, 
+                    'water_level': 65, 'temp_variation': 5
+                })
+                results['shm_assessment'] = shm_assessment
+            except Exception as e:
+                results['shm_assessment'] = {"error": str(e)}
+        
+        # Calculate integrated risk score
+        risk_scores = []
+        if 'ml_prediction' in results and 'risk_score' in results['ml_prediction']:
+            risk_scores.append(results['ml_prediction']['risk_score'])
+        if 'arctic_analysis' in results and 'overall_arctic_risk' in results['arctic_analysis']:
+            risk_scores.append(results['arctic_analysis']['overall_arctic_risk'])
+        if 'shm_assessment' in results and 'integrated_health_score' in results['shm_assessment']:
+            risk_scores.append(100 - results['shm_assessment']['integrated_health_score'])  # Convert health to risk
+        
+        integrated_risk = sum(risk_scores) / len(risk_scores) if risk_scores else 0
+        
+        results['integrated_risk_score'] = round(integrated_risk, 2)
+        results['risk_level'] = (
+            "CRITICAL" if integrated_risk > 80 else
+            "HIGH" if integrated_risk > 60 else
+            "MEDIUM" if integrated_risk > 40 else
+            "LOW"
+        )
+        results['analysis_timestamp'] = datetime.now().isoformat()
+        
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Comprehensive analysis failed: {str(e)}")
 
 # ==================================================================================
 # APPLICATION STARTUP

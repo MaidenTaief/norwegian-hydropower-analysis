@@ -91,6 +91,21 @@ analyzer.create_spatial_visualization()
 analyzer.export_to_kml()
 ```
 
+## ❄️ Arctic Analysis (Moved)
+
+**Arctic dam analysis tools have been moved to a dedicated directory:**
+
+```
+../Arctic_Analysis/
+```
+
+**See the Arctic_Analysis directory for:**
+- Arctic Dam Locator (499 Arctic dams analysis)
+- Arctic Risk Analyzer (scientifically validated)
+- Complete documentation and results
+
+This keeps the Arctic-specific work separate from the general Norwegian hydropower analysis.
+
 ## Key Statistics
 
 ### Norwegian Dam Infrastructure
