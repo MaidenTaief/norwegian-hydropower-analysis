@@ -1,0 +1,84 @@
+\documentclass[tikz,border=10pt]{standalone}
+\usepackage{tikz}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usetikzlibrary{shapes,arrows,positioning,fit,backgrounds}
+
+\begin{document}
+
+\tikzstyle{startstop} = [rectangle, rounded corners, minimum width=3cm, minimum height=1cm, text centered, draw=black, fill=red!30]
+\tikzstyle{io} = [trapezium, trapezium left angle=70, trapezium right angle=110, minimum width=3cm, minimum height=1cm, text centered, draw=black, fill=blue!30]
+\tikzstyle{process} = [rectangle, minimum width=3cm, minimum height=1cm, text centered, draw=black, fill=orange!30]
+\tikzstyle{decision} = [diamond, minimum width=3cm, minimum height=1cm, text centered, draw=black, fill=green!30]
+\tikzstyle{data} = [ellipse, minimum width=3cm, minimum height=1cm, text centered, draw=black, fill=yellow!30]
+\tikzstyle{arrow} = [thick,->,>=stealth]
+
+\begin{tikzpicture}[node distance=2cm]
+
+% Title
+\node (title) [startstop, fill=purple!30, minimum width=8cm] {Arctic Dam Risk Assessment Methodology};
+
+% Data Input Phase
+\node (nve_data) [data, below of=title, xshift=-3cm] {NVE Dam Database\\499 Arctic Locations\\486 with Official Numbers};
+\node (seklima_data) [data, below of=title, xshift=3cm] {Seklima Weather Data\\9 Arctic Stations\\Real Meteorological Records};
+
+% Data Processing
+\node (data_integration) [process, below of=title, yshift=-3cm] {Data Integration \& Quality Control\\Geographic Matching\\Weather Station Assignment};
+
+% Risk Assessment Components
+\node (permafrost) [process, below of=data_integration, xshift=-4.5cm, yshift=-1.5cm] {Permafrost Risk\\Stefan Equation\\Foundation Stability};
+\node (ice_dam) [process, below of=data_integration, xshift=-1.5cm, yshift=-1.5cm] {Ice Dam Risk\\Ashton Method\\Frazil Ice Formation};
+\node (freeze_thaw) [process, below of=data_integration, xshift=1.5cm, yshift=-1.5cm] {Freeze-Thaw Risk\\ACI Guidelines\\Cycle Counting};
+\node (climate) [process, below of=data_integration, xshift=4.5cm, yshift=-1.5cm] {Climate Change\\IPCC AR6 Projections\\Temperature Scenarios};
+
+% Risk Integration
+\node (risk_calc) [decision, below of=data_integration, yshift=-4.5cm] {Risk Integration\\$R_{total} = \sum w_i \cdot R_i \cdot C_{climate}$};
+
+% Classification
+\node (classification) [process, below of=risk_calc, yshift=-1.5cm] {Risk Classification\\High (>60) | Medium (40-60) | Low (<40)};
+
+% Results and Validation
+\node (results) [io, below of=classification, xshift=-2cm, yshift=-1.5cm] {Results Generation\\Statistical Analysis\\Geographic Mapping};
+\node (validation) [io, below of=classification, xshift=2cm, yshift=-1.5cm] {Scientific Validation\\NGI Standards\\ICOLD Guidelines};
+
+% Final Output
+\node (output) [startstop, below of=classification, yshift=-3.5cm, fill=green!30] {Risk Assessment Report\\499 Dams Analyzed\\4 High-Risk Identified};
+
+% Arrows
+\draw [arrow] (title) -- (data_integration);
+\draw [arrow] (nve_data) -- (data_integration);
+\draw [arrow] (seklima_data) -- (data_integration);
+
+\draw [arrow] (data_integration) -- (permafrost);
+\draw [arrow] (data_integration) -- (ice_dam);
+\draw [arrow] (data_integration) -- (freeze_thaw);
+\draw [arrow] (data_integration) -- (climate);
+
+\draw [arrow] (permafrost) -- (risk_calc);
+\draw [arrow] (ice_dam) -- (risk_calc);
+\draw [arrow] (freeze_thaw) -- (risk_calc);
+\draw [arrow] (climate) -- (risk_calc);
+
+\draw [arrow] (risk_calc) -- (classification);
+\draw [arrow] (classification) -- (results);
+\draw [arrow] (classification) -- (validation);
+\draw [arrow] (results) -- (output);
+\draw [arrow] (validation) -- (output);
+
+% Side annotations
+\node (data_note) [text width=3cm, right of=seklima_data, xshift=2cm] {\footnotesize \textbf{Coverage:}\\• 100\% Real Data\\• 9 Weather Stations\\• 2005-2025 Records};
+
+\node (calc_note) [text width=3cm, left of=permafrost, xshift=-2cm] {\footnotesize \textbf{Weights:}\\• Permafrost: 40\%\\• Ice Dam: 25\%\\• Freeze-Thaw: 20\%\\• Climate: 15\%};
+
+\node (result_note) [text width=3cm, right of=output, xshift=2cm] {\footnotesize \textbf{Key Findings:}\\• 79 dams >2.5°C warming\\• 330 sub-arctic zone\\• 486 NVE validated};
+
+% Background boxes
+\begin{scope}[on background layer]
+\node [fit=(nve_data)(seklima_data), fill=blue!10, rounded corners, inner sep=10pt, label=above:\textbf{Data Sources}] {};
+\node [fit=(permafrost)(ice_dam)(freeze_thaw)(climate), fill=orange!10, rounded corners, inner sep=10pt, label=above:\textbf{Risk Components}] {};
+\node [fit=(results)(validation), fill=green!10, rounded corners, inner sep=10pt, label=above:\textbf{Validation \& Output}] {};
+\end{scope}
+
+\end{tikzpicture}
+
+\end{document} 

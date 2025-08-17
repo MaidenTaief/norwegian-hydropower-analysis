@@ -24,15 +24,21 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 import json
+import os
+
 
 logger = logging.getLogger(__name__)
 
-# Import Arctic Dam Locator for real Norwegian dam data
+# Import Arctic Dam Locator and real weather processor
 try:
     from arctic_dam_locator import ArcticDamLocator
+    # Real Arctic weather data processor (replaces FrostAPI completely)
+    from arctic_weather_processor import ArcticWeatherProcessor, get_real_arctic_weather_data
+    REAL_WEATHER_AVAILABLE = True
 except ImportError:
-    logger.warning("Arctic Dam Locator not available - using fallback coordinates")
+    logger.warning("Arctic Dam Locator or weather processor not available - using fallback")
     ArcticDamLocator = None
+    REAL_WEATHER_AVAILABLE = False
 
 @dataclass
 class ArcticConditions:
@@ -85,10 +91,11 @@ class METNorwayAPI:
         if self.session:
             await self.session.close()
     
-    async def get_current_weather(self, latitude: float, longitude: float) -> Dict:
+    async def get_current_weather(self, latitude: float, longitude: float) -> Optional[Dict]:
         """
-        Get current weather conditions from MET Norway
-        Returns real temperature, precipitation, and wind data
+        Get current weather conditions from MET Norway.
+        Returns real temperature, precipitation, and wind data.
+        Returns None if the API call fails, removing the fallback.
         """
         try:
             url = f"{self.BASE_URL}/locationforecast/2.0/compact"
@@ -100,41 +107,20 @@ class METNorwayAPI:
                     current = data['properties']['timeseries'][0]['data']['instant']['details']
                     
                     return {
-                        'air_temperature': current.get('air_temperature', -5),
-                        'wind_speed': current.get('wind_speed', 5),
-                        'relative_humidity': current.get('relative_humidity', 80),
-                        'precipitation': current.get('precipitation_amount', 0),
+                        'air_temperature': current.get('air_temperature'),
+                        'wind_speed': current.get('wind_speed'),
+                        'relative_humidity': current.get('relative_humidity'),
+                        'precipitation': data['properties']['timeseries'][0]['data'].get('next_1_hours', {}).get('details', {}).get('precipitation_amount'),
                         'snow_depth': current.get('snow_depth', 0) / 100,  # Convert cm to m
                         'source': 'MET_Norway_API'
                     }
                 else:
-                    logger.warning(f"MET API returned status {response.status}")
-                    return self._fallback_weather(latitude)
+                    logger.warning(f"MET API returned status {response.status}. No fallback data will be used.")
+                    return None
                     
         except Exception as e:
-            logger.error(f"Error fetching MET Norway data: {e}")
-            return self._fallback_weather(latitude)
-    
-    def _fallback_weather(self, latitude: float) -> Dict:
-        """Fallback weather based on latitude and season"""
-        month = datetime.now().month
-        
-        # Seasonal temperature variation based on Norwegian climate
-        if month in [12, 1, 2]:  # Winter
-            base_temp = -15 + (70 - latitude) * 0.5
-        elif month in [6, 7, 8]:  # Summer
-            base_temp = 15 - (latitude - 60) * 0.3
-        else:  # Spring/Fall
-            base_temp = 0 - (latitude - 60) * 0.2
-            
-        return {
-            'air_temperature': base_temp,
-            'wind_speed': 5,
-            'relative_humidity': 80,
-            'precipitation': 0,
-            'snow_depth': 0.3 if latitude > 66.5 else 0.1,
-            'source': 'Fallback_Climate_Model'
-        }
+            logger.error(f"Error fetching MET Norway data: {e}. No fallback data will be used.")
+            return None
 
 class StefanEquationCalculator:
     """
@@ -198,35 +184,38 @@ class StefanEquationCalculator:
 
 class IPCCClimateProjections:
     """
-    Climate change projections based on IPCC AR6 data
+    Climate change projections based on IPCC AR6 data loaded from a config file.
     Reference: IPCC AR6 WG1 Chapter 12 - Regional Climate Information
     """
     
-    # IPCC AR6 projections for Arctic regions (SSP2-4.5 scenario)
-    ARCTIC_PROJECTIONS_2050 = {
-        "temperature_increase": {
-            "far_arctic": 3.0,  # >70°N - IPCC AR6 Figure 12.5
-            "high_arctic": 2.5,  # 68-70°N
-            "arctic_circle": 2.0  # 66.5-68°N
-        },
-        "precipitation_increase": {
-            "far_arctic": 20,  # % increase
-            "high_arctic": 15,
-            "arctic_circle": 10
-        },
-        "extreme_events": {
-            "heat_wave_frequency": 3.0,  # times more frequent
-            "extreme_precipitation": 1.5,
-            "storm_intensity": 1.3
-        }
-    }
-    
+    def __init__(self, config_path: str = 'ipcc_projections.json'):
+        """
+        Initializes the class by loading projection data from a JSON file.
+        """
+        self.projections = self._load_projections(config_path)
+
+    def _load_projections(self, config_path: str) -> Dict:
+        """Loads IPCC projections from a JSON file."""
+        try:
+            with open(config_path, 'r') as f:
+                logger.info(f"Loading IPCC projections from {config_path}")
+                return json.load(f)
+        except FileNotFoundError:
+            logger.error(f"IPCC projections file not found at {config_path}. Using empty projections.")
+            return {}
+        except json.JSONDecodeError:
+            logger.error(f"Error decoding JSON from {config_path}. Using empty projections.")
+            return {}
+
     def get_temperature_projection(self, latitude: float, year: int = 2050) -> float:
         """
         Get IPCC temperature increase projection for location
         
         Reference: IPCC AR6 WG1 Chapter 12, Figure 12.5
         """
+        if not self.projections:
+            return 0.0
+
         if latitude > 70:
             region = "far_arctic"
         elif latitude > 68:
@@ -234,10 +223,10 @@ class IPCCClimateProjections:
         else:
             region = "arctic_circle"
             
-        base_increase = self.ARCTIC_PROJECTIONS_2050["temperature_increase"][region]
+        base_increase = self.projections.get("temperature_increase", {}).get(region, 0.0)
         
         # Scale by year (linear approximation from 2020-2050)
-        year_factor = (year - 2020) / 30.0
+        year_factor = max(0, (year - 2020) / 30.0)
         
         return base_increase * year_factor
     
@@ -602,7 +591,17 @@ class ArcticRiskAnalyzerImproved:
         self.climate_model = NorwegianArcticClimateModel()
         self.design_assessment = NorwegianDamDesignAssessment()
         self.arctic_locator = None
+        self.weather_processor = None
         
+        # Initialize real Arctic weather processor with Seklima data
+        if REAL_WEATHER_AVAILABLE:
+            try:
+                self.weather_processor = ArcticWeatherProcessor()
+                logger.info("✅ Real Arctic weather processor initialized with Seklima data")
+            except Exception as e:
+                logger.warning(f"Could not initialize weather processor: {e}")
+                self.weather_processor = None
+
         # Initialize Arctic Dam Locator if available
         if ArcticDamLocator:
             try:
@@ -637,8 +636,8 @@ class ArcticRiskAnalyzerImproved:
             "is_arctic": latitude > self.ARCTIC_CIRCLE_LATITUDE,
             "timestamp": datetime.now().isoformat(),
             "current_conditions": {
-                "temperature": current_conditions.air_temperature,
-                "data_sources": current_conditions.data_sources
+                "temperature": current_conditions.air_temperature if current_conditions else None,
+                "data_sources": current_conditions.data_sources if current_conditions else ['No real-time data']
             },
             "seasonal_analysis": {
                 "climate_zone": seasonal_data["climate_zone"],
@@ -688,19 +687,43 @@ class ArcticRiskAnalyzerImproved:
         
         return risk_assessment
     
-    async def _get_real_arctic_conditions(self, dam_id: int, latitude: float, longitude: float) -> ArcticConditions:
+    async def _get_real_arctic_conditions(self, dam_id: int, latitude: float, longitude: float) -> Optional[ArcticConditions]:
         """Get real Arctic environmental conditions from validated sources"""
         
         data_sources = []
         
-        # Get real weather data from MET Norway
-        async with METNorwayAPI() as met_api:
-            weather = await met_api.get_current_weather(latitude, longitude)
-            data_sources.append(weather['source'])
+        # Get real weather data from Seklima Arctic weather processor (PRIORITY)
+        if self.weather_processor:
+            try:
+                weather = self.weather_processor.get_weather_for_location(latitude, longitude)
+                data_sources.append(weather['source'])
+                air_temp = weather['air_temperature']
+                snow_depth = weather['snow_depth']
+                wind_speed = weather['wind_speed']
+                logger.info(f"✅ Using real Seklima weather data from {weather['station_name']}")
+            except Exception as e:
+                logger.warning(f"Error getting Seklima weather data: {e}")
+                weather = None
+        else:
+            weather = None
         
-        air_temp = weather['air_temperature']
-        snow_depth = weather['snow_depth']
-        wind_speed = weather['wind_speed']
+        # Fallback to MET Norway API if Seklima data not available
+        if not weather:
+            try:
+                async with METNorwayAPI() as met_api:
+                    weather = await met_api.get_current_weather(latitude, longitude)
+                
+                if weather and weather.get('air_temperature') is not None:
+                    data_sources.append(weather['source'])
+                    air_temp = weather['air_temperature']
+                    snow_depth = weather['snow_depth']
+                    wind_speed = weather['wind_speed']
+                else:
+                    logger.warning(f"Could not retrieve weather data for dam {dam_id}. Using climate model fallback.")
+                    return None
+            except Exception as e:
+                logger.warning(f"MET Norway API error: {e}. Using climate model fallback.")
+                return None
         
         # Calculate ground temperature with thermal lag (validated approach)
         # Reference: Lunardini (1981), Chapter 2
@@ -719,18 +742,26 @@ class ArcticRiskAnalyzerImproved:
         # Reference: Ashton (1986), River and Lake Ice Engineering
         ice_thickness = max(0, np.sqrt(2000 * abs(air_temp)) / 100) if air_temp < -1 else 0
         
-        # Freeze-thaw cycles from temperature records
-        month = datetime.now().month
-        if month in [3, 4, 9, 10]:  # Spring/fall transitions
-            freeze_thaw_cycles = 20
-        elif month in [5, 6, 7, 8]:  # Summer
-            freeze_thaw_cycles = 3
-        else:  # Winter
-            freeze_thaw_cycles = 8
-        
+        # Get historical freeze-thaw cycles from real weather data
+        if self.weather_processor:
+            try:
+                freeze_thaw_cycles = self.weather_processor.get_historical_freeze_thaw_cycles(latitude, longitude)
+                data_sources.append("Real_Historical_Climate_Analysis")
+                logger.info(f"✅ Using real freeze-thaw data: {freeze_thaw_cycles} cycles/year")
+            except Exception as e:
+                logger.warning(f"Error getting real freeze-thaw data: {e}")
+                # Fallback to climate model if real weather processor fails
+                freeze_thaw_cycles = self.climate_model.get_annual_freeze_thaw_cycles(latitude)
+                data_sources.append("Climate_Model_Fallback")
+        else:
+            # No real weather processor available - use climate model
+            freeze_thaw_cycles = self.climate_model.get_annual_freeze_thaw_cycles(latitude)
+            data_sources.append("Climate_Model_Fallback")
+
+
         # Solar radiation (latitude and season dependent)
         # Reference: Iqbal (1983), Solar Radiation
-        solar_radiation = self._calculate_solar_radiation(latitude, month)
+        solar_radiation = self._calculate_solar_radiation(latitude, datetime.now().month)
         
         # Wind chill calculation (Environment Canada formula)
         wind_chill = 13.12 + 0.6215 * air_temp - 11.37 * (wind_speed ** 0.16) + 0.3965 * air_temp * (wind_speed ** 0.16)
@@ -747,7 +778,9 @@ class ArcticRiskAnalyzerImproved:
             wind_chill=wind_chill,
             data_sources=data_sources
         )
-    
+
+
+
     def _get_dam_design_info(self, dam_id: int) -> Dict:
         """Get dam design information from NVE dataset"""
         
@@ -1061,11 +1094,12 @@ class ArcticRiskAnalyzerImproved:
         """
         Analyze all real Arctic dams from NVE dataset
         """
+        # Use existing CSV data if Arctic Dam Locator is not available
         if not self.arctic_locator:
-            logger.error("Arctic Dam Locator not available")
-            return {"error": "No real dam data available"}
-        
-        arctic_dams = self.arctic_locator.get_arctic_dams_for_analysis()
+            print("📊 Loading Arctic dams from existing CSV data...")
+            arctic_dams = self._load_arctic_dams_from_csv()
+        else:
+            arctic_dams = self.arctic_locator.get_arctic_dams_for_analysis()
         
         if not arctic_dams:
             logger.error("No Arctic dams found")
@@ -1099,7 +1133,7 @@ class ArcticRiskAnalyzerImproved:
                     distance_km = (dam['latitude'] - self.ARCTIC_CIRCLE_LATITUDE) * 111.32
                     print(f"\n❄️ {dam['name']} (ID: {dam_id})")
                     print(f"   📍 {dam['latitude']:.3f}°N, {dam['longitude']:.3f}°E ({distance_km:.0f}km N of Arctic Circle)")
-                    print(f"   🌡️  Data Source: {', '.join(assessment['data_sources'])}")
+                    print(f"   🌡️  Data Source: {', '.join(assessment['current_conditions']['data_sources'])}")
                     print(f"   🧊 Permafrost Risk: {assessment['permafrost_risk']['risk_score']:.1f} ({assessment['permafrost_risk']['foundation_stability_risk']})")
                     print(f"   🌊 Ice Dam Risk: {assessment['ice_dam_risk'].get('risk_score', 0):.1f}")
                     print(f"   ❄️  Overall Risk: {assessment['overall_arctic_risk']:.1f}")
@@ -1116,8 +1150,8 @@ class ArcticRiskAnalyzerImproved:
             "total_dams_analyzed": len(results),
             "high_risk_dams": len([r for r in results if r['overall_arctic_risk'] > 60]),
             "data_quality": {
-                "real_weather_data": len([r for r in results if "MET_Norway_API" in r['data_sources']]),
-                "fallback_data": len([r for r in results if "Fallback_Climate_Model" in r['data_sources']])
+                "real_weather_data": len([r for r in results if "MET_Norway_API" in r['current_conditions']['data_sources']]),
+                "fallback_data": len([r for r in results if "Fallback_Climate_Model" in r['current_conditions']['data_sources']])
             },
             "methodology": "Stefan_equation_IPCC_projections",
             "confidence": "high"
@@ -1129,17 +1163,53 @@ class ArcticRiskAnalyzerImproved:
         print(f"   • Real weather data: {summary['data_quality']['real_weather_data']}")
         print(f"   • Scientific validation: ✅ Stefan equation + IPCC projections")
         
+        # Save detailed results for visualization
+        self._save_detailed_results(results, summary)
+        
         return {
             "summary": summary,
             "individual_assessments": results,
             "methodology": "Scientifically validated with real data sources"
         }
+    
+    def _save_detailed_results(self, results: List[Dict], summary: Dict):
+        """Save detailed analysis results for visualization"""
+        try:
+            from pathlib import Path
+            import json
+            from datetime import datetime
+            
+            results_dir = Path("results")
+            results_dir.mkdir(exist_ok=True)
+            
+            # Prepare comprehensive results
+            detailed_results = {
+                'analysis_date': datetime.now().isoformat(),
+                'analysis_version': 'Arctic Risk Analyzer v2.0 - Real Seklima Data',
+                'total_dams': len(results),
+                'summary_stats': summary,
+                'dam_results': results
+            }
+            
+            # Save to JSON for visualization
+            results_file = results_dir / 'complete_arctic_analysis.json'
+            with open(results_file, 'w') as f:
+                json.dump(detailed_results, f, indent=2, default=str)
+            
+            print(f"\n💾 DETAILED RESULTS SAVED:")
+            print(f"   📁 File: {results_file}")
+            print(f"   📊 Records: {len(results)} dam assessments")
+            print(f"   🎯 Ready for visualization!")
+            
+        except Exception as e:
+            logger.warning(f"Could not save detailed results: {e}")
 
     def _assess_ice_dam_risk(self, conditions: ArcticConditions, latitude: float) -> Dict:
         """
         Assess ice dam formation risk using validated models
         Reference: Ashton, G.D. (1986). River and Lake Ice Engineering
         """
+        if conditions is None: return {}
         assessment = {
             "ice_thickness_m": conditions.ice_thickness_m,
             "ice_jam_probability": 0,
@@ -1180,9 +1250,10 @@ class ArcticRiskAnalyzerImproved:
         Assess concrete degradation from freeze-thaw cycles
         Reference: Mindess, S. et al. (2003). Concrete, 2nd Edition
         """
+        if conditions is None: return {}
         assessment = {
             "freeze_thaw_cycles_month": conditions.freeze_thaw_cycles,
-            "annual_cycles_estimate": conditions.freeze_thaw_cycles * 12,
+            "annual_cycles_estimate": conditions.freeze_thaw_cycles, # Use real annual data now
             "concrete_scaling_risk": "low",
             "crack_propagation_risk": "low", 
             "service_life_reduction_%": 0,
@@ -1229,12 +1300,12 @@ class ArcticRiskAnalyzerImproved:
         }
         
         # Extract individual risk scores
-        permafrost_score = assessment["permafrost_risk"].get("risk_score", 0)
-        ice_dam_score = assessment["ice_dam_risk"].get("risk_score", 0)
-        freeze_thaw_score = assessment["freeze_thaw_risk"].get("degradation_risk", 0)
+        permafrost_score = assessment.get("permafrost_risk", {}).get("risk_score", 0)
+        ice_dam_score = assessment.get("ice_dam_risk", {}).get("risk_score", 0)
+        freeze_thaw_score = assessment.get("freeze_thaw_risk", {}).get("degradation_risk", 0)
         
         # Climate change as risk multiplier rather than additive component
-        temp_increase = assessment["climate_change_impact"].get("temperature_increase_2050", 0)
+        temp_increase = assessment.get("climate_change_impact", {}).get("temperature_increase_2050", 0)
         climate_multiplier = 1.0 + (temp_increase * 0.1)  # 10% increase per degree
         
         # Weighted risk calculation
@@ -1255,7 +1326,7 @@ class ArcticRiskAnalyzerImproved:
         measures = []
         
         # Permafrost-specific measures (NGI Guidelines 2016)
-        permafrost_risk = assessment["permafrost_risk"].get("risk_score", 0)
+        permafrost_risk = assessment.get("permafrost_risk", {}).get("risk_score", 0)
         if permafrost_risk > 50:
             measures.extend([
                 "Install thermosyphons for ground thermal stabilization (NGI Guidelines 2016)",
@@ -1264,7 +1335,7 @@ class ArcticRiskAnalyzerImproved:
             ])
         
         # Ice management measures (Ashton 1986)
-        ice_risk = assessment["ice_dam_risk"].get("risk_score", 0)
+        ice_risk = assessment.get("ice_dam_risk", {}).get("risk_score", 0)
         if ice_risk > 40:
             measures.extend([
                 "Install ice boom 500m upstream of dam (Ashton 1986 design)",
@@ -1273,7 +1344,7 @@ class ArcticRiskAnalyzerImproved:
             ])
         
         # Concrete protection measures (ACI 201.2R)
-        freeze_thaw_risk = assessment["freeze_thaw_risk"].get("degradation_risk", 0)
+        freeze_thaw_risk = assessment.get("freeze_thaw_risk", {}).get("degradation_risk", 0)
         if freeze_thaw_risk > 30:
             measures.extend([
                 "Apply penetrating concrete sealer (ASTM C1543 compliant)",
@@ -1282,7 +1353,7 @@ class ArcticRiskAnalyzerImproved:
             ])
         
         # Climate adaptation measures (IPCC AR6 guidance)
-        temp_increase = assessment["climate_change_impact"].get("temperature_increase_2050", 0)
+        temp_increase = assessment.get("climate_change_impact", {}).get("temperature_increase_2050", 0)
         if temp_increase > 2.0:
             measures.extend([
                 "Develop climate adaptation plan following IPCC AR6 guidance",
@@ -1298,10 +1369,66 @@ class ArcticRiskAnalyzerImproved:
         ])
         
         return measures
+    
+    def _load_arctic_dams_from_csv(self) -> List[Dict]:
+        """Load Arctic dams from existing CSV file"""
+        try:
+            csv_path = Path("results/norwegian_arctic_dams.csv")
+            if not csv_path.exists():
+                logger.error("Arctic dams CSV file not found")
+                return []
+            
+            df = pd.read_csv(csv_path)
+            
+            # Convert to format expected by analysis
+            arctic_dams = []
+            for idx, row in df.iterrows():
+                arctic_dams.append({
+                    "dam_id": idx + 1,
+                    "dam_nr": row.get('dam_nr'),
+                    "name": row.get('dam_name', f"Dam_{idx+1}"),
+                    "latitude": float(row['latitude']),
+                    "longitude": float(row['longitude']),
+                    "construction_year": row.get('construction_year'),
+                    "arctic_distance_km": row.get('arctic_distance_km', 0),
+                    "arctic_region": row.get('arctic_region', 'Arctic Circle')
+                })
+            
+            logger.info(f"✅ Loaded {len(arctic_dams)} Arctic dams from CSV")
+            return arctic_dams
+            
+        except Exception as e:
+            logger.error(f"Error loading Arctic dams from CSV: {e}")
+            return []
 
 if __name__ == "__main__":
+    # Create the ipcc_projections.json file for the script to run
+    ipcc_data = {
+        "temperature_increase": {
+            "far_arctic": 3.0,
+            "high_arctic": 2.5,
+            "arctic_circle": 2.0
+        },
+        "precipitation_increase": {
+            "far_arctic": 20,
+            "high_arctic": 15,
+            "arctic_circle": 10
+        },
+        "extreme_events": {
+            "heat_wave_frequency": 3.0,
+            "extreme_precipitation": 1.5,
+            "storm_intensity": 1.3
+        }
+    }
+    with open("ipcc_projections.json", "w") as f:
+        json.dump(ipcc_data, f, indent=4)
+
     async def main():
+        print("🔬 ARCTIC DAM RISK ANALYZER - IMPROVED VERSION")
+        print("Using REAL Arctic weather data from Seklima (Norwegian Climate Services)")
+        print("="*80)
+
         analyzer = ArcticRiskAnalyzerImproved()
         await analyzer.get_real_arctic_dams_analysis()
     
-    asyncio.run(main()) 
+    asyncio.run(main())
