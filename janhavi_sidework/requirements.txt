@@ -1,0 +1,23 @@
+# Requirements for Norwegian Dam Comparative Analysis
+# For: Janhavi Singh's Conference Paper (India vs Norway)
+
+# Core data processing
+pandas>=1.5.0
+numpy>=1.23.0
+
+# Geospatial analysis
+geopandas>=0.12.0
+shapely>=2.0.0
+fiona>=1.9.0
+pyproj>=3.4.0
+
+# Visualization
+matplotlib>=3.6.0
+seaborn>=0.12.0
+
+# Document generation
+python-docx>=0.8.11
+
+# Optional but recommended
+openpyxl>=3.1.0  # For Excel export if needed
+

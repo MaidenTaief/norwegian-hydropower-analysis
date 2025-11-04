@@ -1,0 +1,94 @@
+======================================================================
+NORWEGIAN DAM INFRASTRUCTURE - KEY STATISTICS SUMMARY
+For: India vs Norway Comparative Conference Paper
+======================================================================
+
+DATA SOURCE
+----------------------------------------------------------------------
+Source: Norwegian Water Resources and Energy Directorate (NVE)
+Dataset: NVE Hydropower Infrastructure Database
+Analysis Date: November 2025
+Reference Year: 2025
+
+OVERALL STATISTICS
+----------------------------------------------------------------------
+Total Dam Points: 4,953
+Total Dam Lines: 4,813
+Total Reservoirs: 2,997
+Dams with Construction Year: 3,891
+
+DECADE-WISE CONSTRUCTION
+----------------------------------------------------------------------
+Peak Construction Decade: 1960s
+Dams Built in Peak Decade: 528
+Earliest Dam Year: 1670
+Latest Dam Year: 2025
+
+AGE DISTRIBUTION
+----------------------------------------------------------------------
+50 yrs to 99 yrs: 1,665 dams
+Less than 25 yrs: 883 dams
+Greater than or Equal to 100 yrs: 710 dams
+25 yrs to 49 yrs: 616 dams
+Under-construction: 19 dams
+
+REGIONAL DISTRIBUTION (TOP 5 COUNTIES)
+----------------------------------------------------------------------
+1. Innlandet: 1,413 dams
+2. Viken: 957 dams
+3. Vestfold og Telemark: 942 dams
+4. Rogaland: 341 dams
+5. Vestland: 329 dams
+
+STORAGE ANALYSIS
+----------------------------------------------------------------------
+Total Storage Capacity: 61,784.0 MCM
+Average Storage per Reservoir: 53.0 MCM
+Largest Reservoir Storage: 3,506.0 MCM
+Large Dams (≥1000 MCM): 10
+
+STORAGE EFFICIENCY (TOPOGRAPHIC ADAPTATION)
+----------------------------------------------------------------------
+Average Storage Efficiency: 10.80 MCM/km²
+Interpretation: High values indicate deep valley/fjord storage
+This reflects Norway's mountainous topography
+
+REGULATION RANGE (OPERATIONAL FLEXIBILITY - UNIQUE)
+----------------------------------------------------------------------
+Reservoirs with Regulation Data: 1,585
+Average Regulation Range: 10.9 meters
+Maximum Regulation Range: 140.0 meters
+Interpretation: High regulation ranges enable hydropower peaking
+Supports Norway's role as 'Battery of Europe' for grid balancing
+
+PURPOSE DISTRIBUTION (TOP 5)
+----------------------------------------------------------------------
+1. Kraftproduksjon: 1830 reservoirs
+2. Vannforsyning: 461 reservoirs
+3. Rekreasjon: 195 reservoirs
+4. Akvakultur - settefisk: 132 reservoirs
+5. Andre: 104 reservoirs
+
+DATA LIMITATIONS
+----------------------------------------------------------------------
+✗ Dam height data: Not available in NVE public dataset
+✓ Construction years: Available for most dams
+✓ Storage volumes: Available for reservoirs
+✓ Regulation ranges: Available (unique to Norwegian data)
+✓ Geographic coordinates: Complete coverage
+✓ Purpose/function: Available for most structures
+
+COMPARATIVE INSIGHTS: NORWAY VS INDIA
+----------------------------------------------------------------------
+• Similar total dam counts (~5,000 vs ~6,600)
+• Different construction peaks (1960s Norway vs 1980s India)
+• Norway: High storage efficiency (deep valleys)
+• India: Broader river valley impoundments
+• Norway: Hydropower dominant purpose
+• India: Multipurpose (irrigation/flood/power)
+• Norway: Unique operational flexibility data
+• India: Comprehensive structural height data
+
+======================================================================
+END OF SUMMARY
+======================================================================
