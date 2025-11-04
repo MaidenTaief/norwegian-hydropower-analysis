@@ -12,6 +12,20 @@ A comprehensive hydropower analysis and real-time monitoring system covering Nor
 
 This toolkit processes hydropower data from multiple sources and transforms it into various formats suitable for analysis, visualization, international comparison, and **real-time monitoring**. The project handles comprehensive dam infrastructure data with advanced spatial analysis capabilities and live monitoring with Norwegian government APIs.
 
+## 📚 **NEW: Comparative Analysis for Academic Publication**
+
+### 🇳🇴🆚🇮🇳 **Norway vs India Dam Infrastructure Study**
+**Publication-ready comparative analysis for conference paper**
+
+- **✅ Comprehensive Norwegian analysis** matching Indian NRLD format
+- **✅ 7 professional visualizations** (regional, age, decade-wise, storage efficiency)
+- **✅ Unique operational metrics** (regulation range - not available for India)
+- **✅ 30 largest reservoirs CSV** with complete technical specifications
+- **✅ Word document report** ready for journal submission
+- **✅ Fully reproducible** analysis with documented methodology
+
+**Location**: [`janhavi_sidework/`](janhavi_sidework/) - Complete deliverables for comparative dam infrastructure research
+
 ## 🚀 **NEW: Real-Time Norwegian Dam Monitoring System**
 
 ### 🇳🇴 **Live Infrastructure Monitoring**
