@@ -34,11 +34,11 @@ Under-construction: 19 dams
 
 REGIONAL DISTRIBUTION (TOP 5 COUNTIES)
 ----------------------------------------------------------------------
-1. Innlandet: 1,413 dams
-2. Viken: 957 dams
-3. Vestfold og Telemark: 942 dams
-4. Rogaland: 341 dams
-5. Vestland: 329 dams
+1. Innlandet: 1,258 dams
+2. Agder: 868 dams
+3. Vestland: 645 dams
+4. Buskerud: 527 dams
+5. Møre og Romsdal: 455 dams
 
 STORAGE ANALYSIS
 ----------------------------------------------------------------------
@@ -63,11 +63,11 @@ Supports Norway's role as 'Battery of Europe' for grid balancing
 
 PURPOSE DISTRIBUTION (TOP 5)
 ----------------------------------------------------------------------
-1. Kraftproduksjon: 1830 reservoirs
-2. Vannforsyning: 461 reservoirs
-3. Rekreasjon: 195 reservoirs
-4. Akvakultur - settefisk: 132 reservoirs
-5. Andre: 104 reservoirs
+1. Power Production: 1830 reservoirs
+2. Water Supply: 461 reservoirs
+3. Recreation: 195 reservoirs
+4. Aquaculture - Juvenile Fish: 132 reservoirs
+5. Other: 104 reservoirs
 
 DATA LIMITATIONS
 ----------------------------------------------------------------------

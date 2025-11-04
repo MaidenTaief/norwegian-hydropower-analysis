@@ -43,7 +43,28 @@ class NorwegianDamComparativeAnalyzer:
         # Reference year for age calculations
         self.current_year = 2025
         
-        # Norwegian county name mapping (fylke)
+        # Norwegian to English translations for purpose field
+        self.purpose_translations = {
+            'Kraftproduksjon': 'Power Production',
+            'Vannforsyning': 'Water Supply',
+            'Rekreasjon': 'Recreation',
+            'Akvakultur - settefisk': 'Aquaculture - Juvenile Fish',
+            'Andre': 'Other',
+            'Akvakultur': 'Aquaculture',
+            'Ukjent': 'Unknown',
+            'Snøproduksjon': 'Snow Production',
+            'Jordvanning': 'Irrigation',
+            'Vassdragsinngrep': 'Watercourse Intervention',
+            'Tidligere fløtning': 'Former Log Floating',
+            'Industri': 'Industry',
+            'Kraftproduksjon, Oppstuvn.dam/sperred': 'Power Production, Damming',
+            'Kraftproduksjon, Vannforsyning': 'Power Production, Water Supply',
+            'Kraftproduksjon, Akvakultur - settefisk': 'Power Production, Aquaculture'
+        }
+        
+        # Norwegian county names (2024/2025 system - 15 fylker)
+        # Note: Approximate assignment based on coordinates
+        # For precise county boundaries, use official Statistics Norway shapefiles
         self.county_map = {
             'Agder': 'Agder',
             'Innlandet': 'Innlandet',
@@ -51,11 +72,15 @@ class NorwegianDamComparativeAnalyzer:
             'Nordland': 'Nordland',
             'Oslo': 'Oslo',
             'Rogaland': 'Rogaland',
-            'Troms og Finnmark': 'Troms og Finnmark',
+            'Troms': 'Troms',
+            'Finnmark': 'Finnmark',
             'Trøndelag': 'Trøndelag',
-            'Vestfold og Telemark': 'Vestfold og Telemark',
+            'Vestfold': 'Vestfold',
+            'Telemark': 'Telemark',
             'Vestland': 'Vestland',
-            'Viken': 'Viken'
+            'Akershus': 'Akershus',
+            'Buskerud': 'Buskerud',
+            'Østfold': 'Østfold'
         }
         
         print("=" * 70)
@@ -93,35 +118,57 @@ class NorwegianDamComparativeAnalyzer:
             return False
     
     def assign_counties(self):
-        """Assign Norwegian counties to dams based on coordinates."""
-        print("🗺️  Assigning counties to dams...")
+        """Assign Norwegian counties to dams based on coordinates.
+        
+        NOTE: This uses APPROXIMATE geographic assignment based on lat/long.
+        For precise county attribution, official Statistics Norway (SSB) 
+        administrative boundary shapefiles should be used.
+        
+        County system: 2024/2025 (15 fylker after Viken dissolution)
+        """
+        print("🗺️  Assigning counties to dams (approximate method)...")
+        print("   ⚠️  Using simplified geographic assignment")
+        print("   ⚠️  For precise boundaries, use official SSB shapefiles\n")
         
         # Simplified county assignment based on latitude/longitude ranges
-        # This is a simplified approach - for production, use actual county boundaries
         def get_county(lat, lon):
-            """Simplified county assignment based on coordinates."""
-            if lat > 69:
-                return 'Troms og Finnmark'
-            elif lat > 67:
+            """Simplified county assignment - APPROXIMATE only."""
+            # Far North
+            if lat > 70:
+                return 'Finnmark'
+            elif lat > 68.5:
+                return 'Troms'
+            # North
+            elif lat > 66.5:
                 return 'Nordland'
-            elif lat > 64.5:
+            # Central
+            elif lat > 64:
                 return 'Trøndelag'
-            elif lat > 62.5 and lon < 8:
+            # West Coast
+            elif lat > 61 and lon < 7:
                 return 'Møre og Romsdal'
-            elif lat > 62.5 and lon >= 8:
-                return 'Innlandet'
-            elif lat > 60.5 and lon < 6:
+            elif lat > 59.5 and lon < 6.5:
                 return 'Vestland'
-            elif lat > 60.5 and lon >= 6 and lon < 10:
+            # Central/Eastern mountains
+            elif lat > 61 and lon >= 7:
                 return 'Innlandet'
-            elif lat > 60.5 and lon >= 10:
+            elif lat > 60 and lon >= 8:
                 return 'Innlandet'
+            # Southwest
             elif lat > 58.5 and lon < 6:
                 return 'Rogaland'
-            elif lat > 58.5 and lon >= 6 and lon < 9:
-                return 'Vestfold og Telemark'
-            elif lat > 58.5 and lon >= 9:
-                return 'Viken'
+            # Southeast regions
+            elif lat > 59 and lon >= 9 and lon < 11:
+                return 'Buskerud'
+            elif lat > 59 and lon >= 11:
+                return 'Akershus'
+            elif lat > 58.5 and lon >= 8 and lon < 10:
+                return 'Telemark'
+            elif lat > 58.5 and lon >= 10:
+                return 'Vestfold'
+            elif lat <= 59 and lon >= 10.5:
+                return 'Østfold'
+            # South
             else:
                 return 'Agder'
         
@@ -172,8 +219,9 @@ class NorwegianDamComparativeAnalyzer:
         dam_with_year['age_category'] = dam_with_year['age'].apply(categorize_age)
         self.age_distribution = dam_with_year['age_category'].value_counts()
         
-        # Add under construction (status check)
+        # Add under construction (status check - 'U' = Under construction in Norwegian data)
         under_construction = len(self.dam_punkt[self.dam_punkt['status'] == 'U'])
+        print(f"   Under construction: {under_construction} dams")
         if under_construction > 0:
             self.age_distribution['Under-construction'] = under_construction
             
@@ -226,10 +274,18 @@ class NorwegianDamComparativeAnalyzer:
         print(f"   Average regulation range: {self.avg_regulation:.1f} meters")
         print(f"   This shows operational flexibility for hydropower peaking\n")
         
-        # 7. PURPOSE DISTRIBUTION
+        # 7. PURPOSE DISTRIBUTION (with English translations)
         print("7️⃣  Purpose/function analysis...")
-        purpose_data = self.magasin[self.magasin['formal_L'].notna()]
-        self.purpose_counts = purpose_data['formal_L'].value_counts()
+        purpose_data = self.magasin[self.magasin['formal_L'].notna()].copy()
+        
+        # Translate Norwegian purposes to English
+        purpose_data['purpose_english'] = purpose_data['formal_L'].map(
+            self.purpose_translations
+        ).fillna(purpose_data['formal_L'])  # Keep original if no translation
+        
+        self.purpose_counts = purpose_data['purpose_english'].value_counts()
+        self.purpose_counts_norwegian = purpose_data['formal_L'].value_counts()
+        
         print(f"   Primary purposes identified: {len(self.purpose_counts)}")
         if len(self.purpose_counts) > 0:
             print(f"   Dominant purpose: {self.purpose_counts.index[0]} "
@@ -518,16 +574,16 @@ class NorwegianDamComparativeAnalyzer:
         print("   ✅ Saved: regulation_range_norway.png")
     
     def _viz_purpose_distribution(self):
-        """Chart 6: Purpose Distribution - Pie Chart."""
-        print("   📊 Creating purpose distribution chart...")
+        """Chart 6: Purpose Distribution - Pie Chart (with English translations)."""
+        print("   📊 Creating purpose distribution chart (English translations)...")
         
         fig, ax = plt.subplots(figsize=(12, 9))
         
-        # Get top purposes
+        # Get top purposes (already in English from calculate_statistics)
         top_purposes = self.purpose_counts.head(8)
         colors = plt.cm.Paired(np.linspace(0, 1, len(top_purposes)))
         
-        # Create pie chart
+        # Create pie chart with English labels
         wedges, texts, autotexts = ax.pie(
             top_purposes.values,
             labels=top_purposes.index,
@@ -537,19 +593,19 @@ class NorwegianDamComparativeAnalyzer:
             textprops={'fontsize': 10, 'fontweight': 'bold'}
         )
         
-        # Style autopct
+        # Style autopct (percentage text)
         for autotext in autotexts:
             autotext.set_color('white')
             autotext.set_fontsize(11)
         
-        ax.set_title('Purpose Distribution of Norwegian Dam Infrastructure',
+        ax.set_title('Purpose Distribution of Norwegian Dam Infrastructure\n(English Translation)',
                     fontsize=15, fontweight='bold', pad=20)
         
         plt.tight_layout()
         plt.savefig(self.viz_dir / 'purpose_distribution_norway.png',
                    dpi=300, bbox_inches='tight')
         plt.close()
-        print("   ✅ Saved: purpose_distribution_norway.png")
+        print("   ✅ Saved: purpose_distribution_norway.png (with English labels)")
     
     def _viz_comparison_table(self):
         """Chart 7: Norway vs India Comparison Table."""
