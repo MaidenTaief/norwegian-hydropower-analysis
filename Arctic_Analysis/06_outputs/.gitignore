@@ -1,0 +1,10 @@
+# Ignore generated outputs (they'll be recreated)
+figures/
+analysis_results/
+*.json
+*.png
+*.csv
+
+# But keep this file
+!.gitignore
+!README.md
