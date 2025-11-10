@@ -21,8 +21,11 @@ class ArcticWeatherProcessor:
     Provides accurate weather conditions for Arctic dam risk analysis
     """
     
-    def __init__(self, csv_path: str = "Arctic_table.csv"):
+    def __init__(self, csv_path: str = None):
         """Initialize with path to Arctic weather CSV"""
+        if csv_path is None:
+            # Default to organized data location
+            csv_path = Path(__file__).parent.parent / "00_data" / "processed" / "Arctic_table.csv"
         self.csv_path = Path(csv_path)
         self.weather_data = None
         self.stations = {}
@@ -40,46 +43,73 @@ class ArcticWeatherProcessor:
                 engine='python'  # Required for skipfooter
             )
             
-            # Clean column names (original columns from CSV)
-            expected_cols = [
-                'Name', 'Station', 'Time(norwegian mean time)', 
-                'Maximum air temperature (season)', 'Mean air temperature (season)',
-                'Mean air temperature, deviation from the 1991-2020 normal (season)',
-                'Precipitation (season)', 
-                'Mean air temperature, deviation from the 1991-2020 normal (summer or winter half-year)'
-            ]
-            
             # Rename columns to simpler names
+            # Handle both (season) and (month) column naming from Seklima
             column_mapping = {
                 'Name': 'name',
                 'Station': 'station_id', 
                 'Time(norwegian mean time)': 'time',
                 'Maximum air temperature (season)': 'max_temp',
+                'Maximum air temperature (month)': 'max_temp',
                 'Mean air temperature (season)': 'mean_temp',
+                'Mean air temperature (month)': 'mean_temp',
+                'Minimum air temperature (season)': 'min_temp',
+                'Minimum air temperature (month)': 'min_temp',
                 'Mean air temperature, deviation from the 1991-2020 normal (season)': 'temp_anomaly',
+                'Mean air temperature, deviation from the 1991-2020 normal (month)': 'temp_anomaly',
                 'Precipitation (season)': 'precipitation',
-                'Mean air temperature, deviation from the 1991-2020 normal (summer or winter half-year)': 'half_year_anomaly'
+                'Precipitation (month)': 'precipitation',
+                'Maximum mean wind speed (month)': 'wind_speed',
+                'Maximum wind gust (month)': 'wind_gust',
+                'Maximum snow depth (month)': 'snow_depth_max',
+                'Mean snow depth (mnd)': 'snow_depth_mean'
             }
             
             self.weather_data = self.weather_data.rename(columns=column_mapping)
             
-            # Convert time to proper datetime with flexible parsing
-            self.weather_data['time'] = pd.to_datetime(
-                self.weather_data['time'], 
-                format='mixed',  # Let pandas figure out the format
-                errors='coerce'  # Convert invalid dates to NaT
-            )
+            # Convert time to proper datetime 
+            # Handle Seklima format: "1.2015" means January 2015 (month.year)
+            # Also handle "1.202" which means January 2020 (typo in data)
+            def parse_seklima_date(date_str):
+                try:
+                    if '.' in str(date_str):
+                        parts = str(date_str).split('.')
+                        if len(parts) == 2:
+                            month = int(parts[0])
+                            year_str = parts[1]
+                            # Handle 3-digit years like "202" -> should be "2020"
+                            if len(year_str) == 3:
+                                year = int(year_str + '0')
+                            else:
+                                year = int(year_str)
+                            # Validate reasonable year range
+                            if year < 100:
+                                year += 2000  # Convert 2-digit year
+                            if year > 2000 and year <= 2030:
+                                return pd.Timestamp(year=year, month=month, day=1)
+                    return pd.to_datetime(date_str, errors='coerce')
+                except:
+                    return pd.NaT
+            
+            self.weather_data['time'] = self.weather_data['time'].apply(parse_seklima_date)
             
             # Remove rows with invalid dates (like the footer)
             self.weather_data = self.weather_data.dropna(subset=['time'])
             
             # Convert numeric columns, handling missing values
-            numeric_cols = ['max_temp', 'mean_temp', 'temp_anomaly', 'precipitation']
+            # Only process columns that actually exist
+            numeric_cols = ['max_temp', 'mean_temp', 'min_temp', 'precipitation', 
+                          'wind_speed', 'wind_gust', 'snow_depth_max', 'snow_depth_mean']
             for col in numeric_cols:
-                self.weather_data[col] = pd.to_numeric(
-                    self.weather_data[col], 
-                    errors='coerce'
-                )
+                if col in self.weather_data.columns:
+                    self.weather_data[col] = pd.to_numeric(
+                        self.weather_data[col], 
+                        errors='coerce'
+                    )
+            
+            # Add temp_anomaly if not present (will be NaN)
+            if 'temp_anomaly' not in self.weather_data.columns:
+                self.weather_data['temp_anomaly'] = np.nan
             
             # Create station lookup
             unique_stations = self.weather_data[['name', 'station_id']].drop_duplicates()
